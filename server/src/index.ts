@@ -27,6 +27,14 @@ app.get('/health', (_req, res) => {
 const server = http.createServer(app)
 const io = new Server(server, {
   cors: { origin: CLIENT_ORIGIN, methods: ['GET', 'POST'] },
+  // เพิ่ม compression ลด bandwidth → ลด latency บน connection ช้า
+  perMessageDeflate: {
+    threshold: 512,       // compress ถ้า payload > 512 bytes
+    zlibDeflateOptions: { level: 1 },  // level 1 = เร็วที่สุด, compress พอประมาณ
+  },
+  // ลด ping interval เพื่อ detect disconnect เร็วขึ้น
+  pingInterval: 10000,
+  pingTimeout: 5000,
 })
 
 app.get('/api/rooms', (_req, res) => {

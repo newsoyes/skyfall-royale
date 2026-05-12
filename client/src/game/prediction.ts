@@ -14,7 +14,7 @@ const JUMP_V = 10.2
 const WALK_SPD = 6.8
 const SPRINT_SPD = 11.2
 const SNAP_THRESHOLD = 4.0      // หน่วย: ถ้า error > นี้ snap ทันที
-const RECONCILE_ALPHA = 0.22    // lerp speed ต่อ frame (ยิ่งสูงยิ่งเร็ว)
+const RECONCILE_ALPHA = 0.35    // เพิ่มจาก 0.22 → ตัวละครตัวเองตอบสนองเร็วขึ้น
 
 export interface PredictedState {
   x: number

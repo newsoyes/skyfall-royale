@@ -10,7 +10,7 @@ import type {
 import { recordMatchEnd } from './db.js'
 import { buildColliders, closestPropHit, resolvePlayerAgainstProps, type PropColliders } from './propColliders.js'
 
-const TICK_MS = 50
+const TICK_MS = 40   // เพิ่มจาก 50ms → 40ms (25 ticks/s) ลด jitter โดยไม่หนัก CPU มาก
 const MAX_PLAYERS = 50
 const SKY_SPAWN_Y = 110
 const SKYDIVE_THRESHOLD = 20

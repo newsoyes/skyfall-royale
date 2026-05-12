@@ -141,9 +141,15 @@ function buildWeaponMesh(w: WeaponId): THREE.Group {
 }
 
 // ── Per-player runtime state ──────────────────────────────────────────────────
+interface SnapEntry {
+  x: number; y: number; z: number
+  t: number  // server timestamp
+}
+
 interface PlayerRuntime {
   object: THREE.Group
-  smoothPos: THREE.Vector3
+  // Interpolation buffer: เก็บ 2 snapshot ล่าสุด
+  snapBuf: [SnapEntry, SnapEntry]
   currentWeapon: WeaponId | null
   isSelf: boolean
 }
@@ -154,19 +160,21 @@ export function WorldPlayers() {
   const groupRef = useRef<THREE.Group>(null!)
   const runtimes = useRef(new Map<string, PlayerRuntime>())
   const bobPhase = useRef(0)
+  // renderTime = server time ที่เราแสดงผล (ล้าหลัง server จริง ~100ms เพื่อ buffer)
+  const INTERP_DELAY_MS = 100
 
-  useFrame((_, dt) => {
+  useFrame((_state, dt) => {
     const snap = useGame.getState().snapshot
     if (!snap) return
 
     bobPhase.current += dt * 9
-    const alpha = 1 - Math.exp(-dt * 18)  // lerp speed — higher = snappier
+    // renderTime คือ server timestamp ที่เราต้องการ interpolate ไปหา
+    const renderTime = snap.t - INTERP_DELAY_MS
 
     const seen = new Set<string>()
 
     for (const p of snap.players) {
       if (!p.alive) {
-        // Hide dead players
         const rt = runtimes.current.get(p.id)
         if (rt) rt.object.visible = false
         continue
@@ -180,9 +188,10 @@ export function WorldPlayers() {
         const isSelf = p.id === playerId
         const obj = buildPlayerObject(isSelf)
         groupRef.current.add(obj)
+        const initSnap: SnapEntry = { x: p.x, y: p.y, z: p.z, t: snap.t }
         rt = {
           object: obj,
-          smoothPos: new THREE.Vector3(p.x, p.y, p.z),
+          snapBuf: [initSnap, { ...initSnap }],
           currentWeapon: null,
           isSelf,
         }
@@ -191,21 +200,33 @@ export function WorldPlayers() {
 
       rt.object.visible = true
 
-      // ── Smooth position (lerp toward server position every frame) ──────────
-      rt.smoothPos.x += (p.x - rt.smoothPos.x) * alpha
-      rt.smoothPos.y += (p.y - rt.smoothPos.y) * alpha
-      rt.smoothPos.z += (p.z - rt.smoothPos.z) * alpha
+      // อัปเดต buffer ด้วย snapshot ล่าสุด
+      const latest = rt.snapBuf[1]
+      if (snap.t > latest.t) {
+        rt.snapBuf[0] = { ...rt.snapBuf[1] }
+        rt.snapBuf[1] = { x: p.x, y: p.y, z: p.z, t: snap.t }
+      }
 
-      // For local player: use predicted position instead of server position
+      // ── Position ───────────────────────────────────────────────────────────
       if (rt.isSelf) {
+        // ตัวเอง: ใช้ client prediction โดยตรง ไม่ต้องรอ buffer
         const predicted = predictedRef.current
         if (predicted) {
           rt.object.position.set(predicted.x, predicted.y, predicted.z)
         } else {
-          rt.object.position.copy(rt.smoothPos)
+          rt.object.position.set(p.x, p.y, p.z)
         }
       } else {
-        rt.object.position.copy(rt.smoothPos)
+        // ผู้เล่นอื่น: interpolate ระหว่าง 2 snapshots ที่ผ่านมา
+        const s0 = rt.snapBuf[0]
+        const s1 = rt.snapBuf[1]
+        const span = s1.t - s0.t
+        const alpha = span > 0 ? Math.min(1, (renderTime - s0.t) / span) : 1
+        rt.object.position.set(
+          s0.x + (s1.x - s0.x) * alpha,
+          s0.y + (s1.y - s0.y) * alpha,
+          s0.z + (s1.z - s0.z) * alpha,
+        )
       }
 
       // ── Rotation ───────────────────────────────────────────────────────────
