@@ -1,12 +1,49 @@
 import { useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 
-const sens = 0.0022
+const BASE_SENS = 0.0022
+const SENS_MIN = 0.1
+const SENS_MAX = 5.0
+const SENS_KEY = 'skyfall_mouse_sensitivity'
+
+/** Clamp sensitivity to [0.1, 5.0] */
+function clampSensitivity(v: number): number {
+  return Math.max(SENS_MIN, Math.min(SENS_MAX, v))
+}
+
+/** Load mouse sensitivity from localStorage. Falls back to 1.0 on invalid/missing value. */
+export function loadSensitivity(): number {
+  try {
+    const raw = localStorage.getItem(SENS_KEY)
+    if (raw === null) return 1.0
+    const parsed = parseFloat(raw)
+    if (!isFinite(parsed)) return 1.0
+    return clampSensitivity(parsed)
+  } catch {
+    return 1.0
+  }
+}
+
+/** Save mouse sensitivity to localStorage (clamped). */
+export function saveSensitivity(v: number): void {
+  try {
+    const clamped = clampSensitivity(v)
+    localStorage.setItem(SENS_KEY, String(clamped))
+  } catch {
+    // ignore storage errors
+  }
+}
 
 /** Keyboard + pointer-lock look; writes `window.__lastInput` for the network tick. */
 export function InputControls({ active }: { active: boolean }) {
   const keys = useRef<Record<string, boolean>>({})
+  const userSensitivity = useRef<number>(loadSensitivity())
   const { gl } = useThree()
+
+  // Expose sensitivity ref via window so SensitivityPanel can update it without prop drilling
+  useEffect(() => {
+    window.__sensitivity = userSensitivity
+  }, [])
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -37,8 +74,8 @@ export function InputControls({ active }: { active: boolean }) {
   useEffect(() => {
     const onMouse = (e: MouseEvent) => {
       if (document.pointerLockElement !== gl.domElement) return
-      window.__lastInput.yaw -= e.movementX * sens
-      window.__lastInput.pitch -= e.movementY * sens
+      window.__lastInput.yaw -= e.movementX * BASE_SENS * userSensitivity.current
+      window.__lastInput.pitch -= e.movementY * BASE_SENS * userSensitivity.current
       window.__lastInput.pitch = Math.max(-1.45, Math.min(1.45, window.__lastInput.pitch))
     }
     window.addEventListener('mousemove', onMouse)

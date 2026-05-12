@@ -48,12 +48,29 @@ export function NetworkLayer() {
       if (p.phase === 'playing') goPlaying()
     }
     const onMatchStart = () => {
+      useGame.getState().resetHitLog()
+      useGame.getState().setGhostPosition(null)
       goPlaying()
     }
     const onState = (s: unknown) => {
       setSnapshot(s as never)
-      const snap = s as { phase?: string }
+      const snap = s as { phase?: string; damageNumbers?: Array<{ shooterId: string; targetId: string; targetUsername: string; damage: number; head: boolean }> }
       if (snap.phase === 'playing') goPlaying()
+      // Populate hitLog from damageNumbers where shooterId === me
+      const pid = useSession.getState().playerId
+      if (pid && snap.damageNumbers) {
+        for (const dn of snap.damageNumbers) {
+          if (dn.shooterId === pid) {
+            useGame.getState().appendHit({
+              targetId: dn.targetId,
+              targetUsername: dn.targetUsername || 'Unknown',
+              damage: dn.damage,
+              isHead: dn.head,
+              at: performance.now(),
+            })
+          }
+        }
+      }
     }
     const onMatchEnd = (e: unknown) => {
       useCombat.getState().setAds(false)
@@ -165,6 +182,11 @@ export function NetworkLayer() {
           str: window.__lastInput.str,
         })
       }
+      // Send ghost position if in ghost mode
+      const ghostPos = useGame.getState().ghostPosition
+      if (ghostPos && me && !me.alive) {
+        sock.emit('game:ghostMove', ghostPos)
+      }
     }, 50)
     return () => clearInterval(id)
   }, [uiPhase])
@@ -182,6 +204,8 @@ declare global {
       yaw: number
       pitch: number
     }
+    /** Ref to the sensitivity value in InputControls — updated by SensitivityPanel */
+    __sensitivity?: { current: number }
   }
 }
 

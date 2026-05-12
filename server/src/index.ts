@@ -205,6 +205,11 @@ io.on('connection', (socket) => {
     currentRoom(socket)?.handleVehicleInput(socket.id, payload.fwd ?? 0, payload.str ?? 0)
   })
 
+  socket.on('game:ghostMove', (payload: { x: number; y: number; z: number; yaw: number; pitch: number }) => {
+    if (!payload) return
+    currentRoom(socket)?.handleGhostMove(socket.id, payload)
+  })
+
   socket.on('disconnect', () => {
     online = Math.max(0, online - 1)
     io.emit('lobby:online', online)

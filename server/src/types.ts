@@ -43,6 +43,7 @@ export interface PlayerState {
   inVehicleId: string | null
   /** Throwable consumable counts */
   consumables: Partial<Record<ConsumableId, number>>
+  isGhost: boolean
 }
 
 export interface PickupState {
@@ -84,6 +85,7 @@ export interface KillFeedEntry {
 export interface DamageNumber {
   id: string; x: number; y: number; z: number
   damage: number; head: boolean; at: number
+  shooterId: string; targetId: string; targetUsername: string
 }
 
 export interface HitFx {

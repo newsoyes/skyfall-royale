@@ -10,10 +10,13 @@ import { predictedRef } from './GameFxLoop'
 const BASE_DIST = 5.2
 const DEATH_CAM_RISE_SPEED = 0.6
 const DEATH_CAM_MAX_HEIGHT = 28
+const GHOST_SPEED = 20  // units/sec
 
 const _eye = new THREE.Vector3()
 const _look = new THREE.Vector3()
 const _fwd = new THREE.Vector3()
+const _right = new THREE.Vector3()
+const _up = new THREE.Vector3(0, 1, 0)
 
 export function ThirdPersonCamera() {
   const { camera } = useThree()
@@ -28,8 +31,47 @@ export function ThirdPersonCamera() {
     const me = snap.players.find((p) => p.id === playerId)
     if (!me) return
 
-    // ── DEAD: death cam or spectate ──────────────────────────────────────────
+    // ── DEAD ─────────────────────────────────────────────────────────────────
     if (!me.alive) {
+      // Ghost mode: free-fly first-person
+      if (me.isGhost && !me.spectatingId) {
+        const inp = window.__lastInput
+        const yaw = inp.yaw
+        const pitch = inp.pitch
+        const cosP = Math.cos(pitch)
+        const sinP = Math.sin(pitch)
+        const sinY = Math.sin(yaw)
+        const cosY = Math.cos(yaw)
+        _fwd.set(sinY * cosP, sinP, cosY * cosP).normalize()
+        _right.crossVectors(_fwd, _up).normalize()
+
+        // Get or init ghost position
+        let gp = useGame.getState().ghostPosition
+        if (!gp) {
+          gp = { x: me.x, y: me.y + 2, z: me.z, yaw, pitch }
+          useGame.getState().setGhostPosition(gp)
+        }
+
+        // Move ghost
+        const fwd = inp.fwd
+        const str = inp.str
+        const up = inp.jump ? 1 : inp.sprint ? -1 : 0
+        const nx = gp.x + (_fwd.x * fwd - _right.x * str) * GHOST_SPEED * dt
+        const ny = gp.y + up * GHOST_SPEED * dt
+        const nz = gp.z + (_fwd.z * fwd - _right.z * str) * GHOST_SPEED * dt
+        useGame.getState().setGhostPosition({ x: nx, y: ny, z: nz, yaw, pitch })
+
+        // First-person camera at ghost position
+        camera.position.set(nx, ny + 0.5, nz)
+        _look.set(nx + _fwd.x * 80, ny + 0.5 + _fwd.y * 80, nz + _fwd.z * 80)
+        camera.lookAt(_look)
+        camera.fov += (72 - camera.fov) * (1 - Math.exp(-8 * dt))
+        camera.updateProjectionMatrix()
+        deathPos.current = null
+        return
+      }
+
+      // Spectating another player
       if (me.spectatingId) {
         const target = snap.players.find((p) => p.id === me.spectatingId)
         if (target) {
@@ -45,9 +87,11 @@ export function ThirdPersonCamera() {
           camera.fov += (72 - camera.fov) * (1 - Math.exp(-8 * dt))
           camera.updateProjectionMatrix()
         }
+        deathPos.current = null
         return
       }
 
+      // Default death cam (orbit)
       if (!deathPos.current) {
         deathPos.current = new THREE.Vector3(me.x, me.y, me.z)
         deathCamY.current = me.y + 2
@@ -79,8 +123,6 @@ export function ThirdPersonCamera() {
     const posY = predicted?.y ?? me.y
     const posZ = predicted?.z ?? me.z
 
-    // ✅ KEY FIX: ใช้ window.__lastInput.yaw/pitch โดยตรง (update ทุก frame จาก mouse)
-    // แทนที่จะใช้ me.yaw/pitch ที่มาจาก server snapshot (50ms lag → กระตุก)
     const inp = window.__lastInput
     const yaw = inp.yaw
     const pitch = inp.pitch

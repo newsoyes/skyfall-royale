@@ -109,6 +109,7 @@ type InternalPlayer = {
   armor: ArmorState
   inVehicleId: string | null
   consumables: Partial<Record<import('./types.js').ConsumableId, number>>
+  isGhost: boolean
 }
 
 function weaponInHand(p: InternalPlayer): WeaponId | null {
@@ -226,6 +227,7 @@ export class GameRoom {
       armor: { helmet: null, vest: null },
       inVehicleId: null,
       consumables: {},
+      isGhost: false,
     }
     this.players.set(id, p)
     this.socketToPlayer.set(socket.id, id)
@@ -353,6 +355,7 @@ export class GameRoom {
       p.armor = { helmet: null, vest: null }
       p.inVehicleId = null
       p.consumables = {}
+      p.isGhost = false
     }
 
     // Assign teams for duo/squad mode
@@ -488,6 +491,7 @@ export class GameRoom {
       target.alive = false
       target.downed = false
       target.pendingReload = null
+      target.isGhost = true
       if (attacker && attacker.id !== target.id) {
         attacker.kills += 1
         const w = weaponInHand(attacker) ?? 'ar'
@@ -1019,7 +1023,7 @@ export class GameRoom {
         const hitX = origin.x + rd.x * hit.t
         const hitY = origin.y + rd.y * hit.t
         const hitZ = origin.z + rd.z * hit.t
-        this.pushDamageNumber(hitX, hitY, hitZ, Math.round(dmg), hit.head)
+        this.pushDamageNumber(hitX, hitY, hitZ, Math.round(dmg), hit.head, p.id, target.id, target.username)
         this.hitFx.push({ id: randomUUID(), x: hitX, y: hitY, z: hitZ, material: 'flesh', at: Date.now() })
         this.io.to(this.channel).emit('fx:hitmarker', { shooterId: p.id, damage: Math.round(dmg), head: hit.head })
       }
@@ -1100,9 +1104,9 @@ export class GameRoom {
     return tmin >= 0 ? tmin : tmax >= 0 ? tmax : null
   }
 
-  private pushDamageNumber(x: number, y: number, z: number, damage: number, head: boolean) {
+  private pushDamageNumber(x: number, y: number, z: number, damage: number, head: boolean, shooterId: string, targetId: string, targetUsername: string) {
     const now = Date.now()
-    this.damageNumbers.push({ id: randomUUID(), x, y, z, damage, head, at: now })
+    this.damageNumbers.push({ id: randomUUID(), x, y, z, damage, head, at: now, shooterId, targetId, targetUsername })
     if (this.damageNumbers.length > 40) this.damageNumbers.shift()
   }
 
@@ -1211,6 +1215,17 @@ export class GameRoom {
     const v = this.vehicles.get(p.inVehicleId)
     if (!v) return
     v.driverInput = { fwd: Math.max(-1, Math.min(1, fwd)), str: Math.max(-1, Math.min(1, str)) }
+  }
+
+  handleGhostMove(socketId: string, pos: { x: number; y: number; z: number; yaw: number; pitch: number }) {
+    const p = this.getPlayerBySocket(socketId)
+    if (!p || p.alive) return  // only dead players can ghost-move
+    const clamped = this.clampToMap(pos.x, pos.z)
+    p.x = clamped.x
+    p.y = pos.y
+    p.z = clamped.z
+    p.yaw = pos.yaw
+    p.pitch = Math.max(-1.45, Math.min(1.45, pos.pitch))
   }
 
   private updateVehicles(dt: number) {
@@ -1365,6 +1380,7 @@ export class GameRoom {
       armor: { ...p.armor },
       inVehicleId: p.inVehicleId,
       consumables: { ...p.consumables },
+      isGhost: p.isGhost,
     }))
     const pickups = [...this.pickups.values()]
     const projectiles = [...this.projectiles.values()]

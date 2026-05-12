@@ -23,6 +23,19 @@ export type ThrowAnim = {
   at: number
 }
 
+export type HitLogEntry = {
+  targetId: string
+  targetUsername: string
+  damage: number
+  isHead: boolean
+  at: number
+}
+
+export type GhostPosition = {
+  x: number; y: number; z: number
+  yaw: number; pitch: number
+}
+
 type GameSlice = {
   snapshot: ServerGameSnapshot | null
   setSnapshot: (s: ServerGameSnapshot | null) => void
@@ -42,6 +55,13 @@ type GameSlice = {
   addSmokeCloud: (pos: { x: number; y: number; z: number; radius: number; durationMs: number }) => void
   throwAnims: ThrowAnim[]
   bumpThrow: (playerId: string, type: 'grenade' | 'smoke_grenade', at: number) => void
+  // Hit log for post-death damage panel
+  hitLog: HitLogEntry[]
+  appendHit: (entry: HitLogEntry) => void
+  resetHitLog: () => void
+  // Ghost mode position (client-side free-fly)
+  ghostPosition: GhostPosition | null
+  setGhostPosition: (pos: GhostPosition | null) => void
 }
 
 export const useGame = create<GameSlice>((set) => ({
@@ -98,4 +118,12 @@ export const useGame = create<GameSlice>((set) => ({
         { playerId, type, at },
       ],
     })),
+  hitLog: [],
+  appendHit: (entry) =>
+    set((s) => ({
+      hitLog: [...s.hitLog, entry].slice(-200),
+    })),
+  resetHitLog: () => set({ hitLog: [] }),
+  ghostPosition: null,
+  setGhostPosition: (ghostPosition) => set({ ghostPosition }),
 }))
