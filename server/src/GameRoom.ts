@@ -912,16 +912,8 @@ export class GameRoom {
     if (!p || this.phase !== 'playing') return
     if (p.alive) {
       p.lastInput = inp
-    } else {
-      // Dead player: cycle spectate target with jump key
-      if (inp.jump) {
-        const alive = [...this.players.values()].filter((pl) => pl.alive)
-        if (alive.length === 0) return
-        const cur = alive.findIndex((pl) => pl.id === p.spectatingId)
-        // findIndex returns -1 if not found → (−1+1)%n = 0, which is correct
-        p.spectatingId = alive[(cur + 1) % alive.length]!.id
-      }
     }
+    // Dead players use ghost mode (handleGhostMove) — no spectate cycling
   }
 
   handleWeaponIndex(socketId: string, index: number) {
@@ -1025,7 +1017,8 @@ export class GameRoom {
         const hitZ = origin.z + rd.z * hit.t
         this.pushDamageNumber(hitX, hitY, hitZ, Math.round(dmg), hit.head, p.id, target.id, target.username)
         this.hitFx.push({ id: randomUUID(), x: hitX, y: hitY, z: hitZ, material: 'flesh', at: Date.now() })
-        this.io.to(this.channel).emit('fx:hitmarker', { shooterId: p.id, damage: Math.round(dmg), head: hit.head })
+        // Send to shooter for hitmarker sound, and to target for blood vignette
+        this.io.to(this.channel).emit('fx:hitmarker', { shooterId: p.id, targetId: target.id, damage: Math.round(dmg), head: hit.head })
       }
     }
   }
@@ -1377,7 +1370,7 @@ export class GameRoom {
       teamId: p.teamId,
       downed: p.downed,
       reviveProgress: p.reviveProgress,
-      armor: { ...p.armor },
+      armor: { helmet: p.armor.helmet, vest: p.armor.vest },
       inVehicleId: p.inVehicleId,
       consumables: { ...p.consumables },
       isGhost: p.isGhost,

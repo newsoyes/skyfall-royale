@@ -23,6 +23,8 @@ export function NetworkLayer() {
   const uiPhase = useSession((s) => s.uiPhase)
 
   const seq = useRef(0)
+  // Track damage number IDs already appended to hitLog to prevent duplicates
+  const seenDamageIds = useRef(new Set<string>())
 
   useEffect(() => {
     const sock = getSocket()
@@ -77,11 +79,16 @@ export function NetworkLayer() {
       setEndMatch(e as never)
       setUiPhase('ended')
     }
-    const onHit = (h: { shooterId: string; damage: number; head: boolean }) => {
-      if (h.shooterId === useSession.getState().playerId) {
-        setHit({ damage: h.damage, head: h.head, at: performance.now() })
+    const onHit = (h: { shooterId: string; targetId: string; damage: number; head: boolean }) => {
+      const pid = useSession.getState().playerId
+      // Hitmarker sound for the shooter
+      if (h.shooterId === pid) {
         if (h.head) sounds.headshotMarker()
         else sounds.hitmarker()
+      }
+      // Blood vignette for the target (person who got shot)
+      if (h.targetId === pid) {
+        setHit({ damage: h.damage, head: h.head, at: performance.now() })
       }
     }
     const onEmote = (e: { playerId: string; at: number }) => bumpEmote(e.playerId, e.at)

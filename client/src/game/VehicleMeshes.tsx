@@ -180,9 +180,20 @@ export function VehicleMeshes() {
       }
     }
 
-    // Remove stale vehicles
+    // Remove stale vehicles — dispose geometries and clone materials
     for (const [id, rt] of runtimes.current) {
       if (!seen.has(id)) {
+        rt.object.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.geometry?.dispose()
+            // Dispose cloned materials (HP bar fg uses cloned material)
+            if (Array.isArray(child.material)) {
+              child.material.forEach((m) => m.dispose())
+            } else {
+              child.material?.dispose()
+            }
+          }
+        })
         groupRef.current.remove(rt.object)
         runtimes.current.delete(id)
       }

@@ -149,26 +149,13 @@ function DamageLogPanel({ totalDamage }: { totalDamage: number }) {
 }
 
 // ── Spectate Hint ─────────────────────────────────────────────────────────────
-function SpectateHint({ spectatingId, isGhost }: { spectatingId: string | null; isGhost: boolean }) {
-  if (isGhost) {
-    return (
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-        <div className="rounded-2xl border border-slate-400/30 bg-black/60 px-8 py-4 text-center backdrop-blur">
-          <p className="text-2xl font-black text-slate-300">👻 โหมดผี</p>
-          <p className="mt-1 text-sm text-slate-400">WASD บิน · Space ขึ้น · Shift ลง</p>
-          <p className="mt-1 text-xs text-slate-500">กด [Space] เพื่อดูผู้เล่นอื่น</p>
-        </div>
-      </div>
-    )
-  }
+function GhostHint() {
   return (
     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-      <div className="rounded-2xl border border-white/20 bg-black/60 px-8 py-4 text-center backdrop-blur">
-        <p className="text-2xl font-black text-rose-400">คุณถูกกำจัด</p>
-        <p className="mt-2 text-base font-bold text-white">
-          {spectatingId ? 'กด [Space] เพื่อเปลี่ยนเป้าหมาย' : 'กด [Space] เพื่อดูผู้เล่นอื่น'}
-        </p>
-        <p className="mt-1 text-xs text-slate-400">หรือรอดูในโหมดผี</p>
+      <div className="rounded-2xl border border-slate-400/30 bg-black/65 px-8 py-5 text-center backdrop-blur">
+        <p className="text-3xl font-black text-slate-200">👻 โหมดผี</p>
+        <p className="mt-2 text-sm font-semibold text-slate-300">WASD เคลื่อนที่ · Space ขึ้น · Shift ลง</p>
+        <p className="mt-1 text-xs text-slate-500">บินไปมาได้อิสระ · ผู้เล่นอื่นเห็นคุณได้</p>
       </div>
     </div>
   )
@@ -347,9 +334,9 @@ export function Hud() {
         </div>
       )}
 
-      {/* Dead overlay: SpectateHint + DamageLog */}
+      {/* Dead overlay: GhostHint + DamageLog */}
       {isDead && snapshot.remaining > 0 && (
-        <SpectateHint spectatingId={me.spectatingId} isGhost={isGhost} />
+        <GhostHint />
       )}
       {isDead && (
         <DamageLogPanel totalDamage={me.damageDealt} />

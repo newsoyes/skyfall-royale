@@ -23,9 +23,7 @@ const matSelf       = new THREE.MeshStandardMaterial({ color: '#5eead4', roughne
 const matOther      = new THREE.MeshStandardMaterial({ color: '#fb7185', roughness: 0.45 })
 const matTeammate   = new THREE.MeshStandardMaterial({ color: '#3b82f6', roughness: 0.45 })
 const matGhost      = new THREE.MeshStandardMaterial({ color: '#9ca3af', transparent: true, opacity: 0.35, roughness: 0.6 })
-const matGhostSkin  = new THREE.MeshStandardMaterial({ color: '#9ca3af', transparent: true, opacity: 0.35, roughness: 0.6 })
 const matGun        = new THREE.MeshStandardMaterial({ color: '#2a2a2a', metalness: 0.6, roughness: 0.35 })
-const matGunDark    = new THREE.MeshStandardMaterial({ color: '#1a1a2e', metalness: 0.7, roughness: 0.3 })
 const matChute      = new THREE.MeshStandardMaterial({ color: '#f97316', transparent: true, opacity: 0.85, side: THREE.DoubleSide })
 const matChuteLines = new THREE.MeshStandardMaterial({ color: '#fde68a', roughness: 0.8 })
 
@@ -200,7 +198,6 @@ export function WorldPlayers() {
     const seen = new Set<string>()
 
     for (const p of snap.players) {
-      // Show alive players AND ghosts (isGhost=true means dead but visible)
       const isVisible = p.alive || p.isGhost
       if (!isVisible) {
         const rt = runtimes.current.get(p.id)
@@ -256,7 +253,6 @@ export function WorldPlayers() {
           rt.object.position.set(p.x, p.y, p.z)
         }
       } else if (rt.isSelf && isGhost) {
-        // Self ghost: use ghostPosition from store
         const gp = useGame.getState().ghostPosition
         if (gp) rt.object.position.set(gp.x, gp.y, gp.z)
         else rt.object.position.set(p.x, p.y, p.z)
@@ -287,6 +283,10 @@ export function WorldPlayers() {
       const w = (!isGhost ? p.loadout[p.weaponIndex] : null) as WeaponId | null
       if (w !== rt.currentWeapon) {
         const wg = rt.object.userData.weaponGroup as THREE.Group
+        // Dispose old weapon geometries before clearing
+        wg.children.forEach((child) => {
+          if (child instanceof THREE.Mesh) child.geometry?.dispose()
+        })
         wg.clear()
         if (w) wg.add(buildWeaponMesh(w))
         rt.currentWeapon = w
@@ -295,46 +295,48 @@ export function WorldPlayers() {
       // ── Parachute ──────────────────────────────────────────────────────────
       const chuteGroup = rt.object.userData.chuteGroup as THREE.Group
       chuteGroup.visible = p.skydiving && !isGhost
-
-      // ── NameTag (billboard via Html — skip self) ───────────────────────────
-      // NameTag is managed as a separate Html element stored in userData
-      // We update visibility/color each frame via the DOM element ref
-      const nameTagEl = rt.object.userData.nameTagEl as HTMLDivElement | undefined
-      if (nameTagEl) {
-        const dist = rt.object.position.distanceTo(
-          new THREE.Vector3(myPlayer?.x ?? 0, myPlayer?.y ?? 0, myPlayer?.z ?? 0)
-        )
-        nameTagEl.style.display = (isSelf || dist > 80) ? 'none' : 'block'
-        const color = isGhost ? '#9ca3af' : getNameTagColor(isTeammate, teamMode)
-        nameTagEl.style.color = color
-        nameTagEl.style.borderColor = color + '66'
-      }
     }
 
-    // Remove stale
+    // Remove stale — dispose Three.js resources to prevent memory leaks
     for (const [id, rt] of runtimes.current) {
       if (!seen.has(id)) {
+        // Dispose all geometries in the player object tree
+        rt.object.traverse((child) => {
+          if (child instanceof THREE.Mesh) child.geometry?.dispose()
+        })
         groupRef.current.remove(rt.object)
         runtimes.current.delete(id)
       }
     }
   })
 
-  // Render Html NameTags as React children (Html from drei handles billboard)
-  const snap = useGame((s) => s.snapshot)
-  const players = snap?.players ?? []
-  const teamMode = snap?.teamMode ?? 'solo'
+  return <group ref={groupRef} />
+}
+
+// ── NameTag component — separate from WorldPlayers to avoid re-render coupling ──
+export function PlayerNameTags() {
+  const playerId = useSession((s) => s.playerId)
+  // Subscribe to snapshot for NameTag updates — this component re-renders on snapshot change
+  // but is lightweight (just Html divs, no Three.js objects)
+  const players = useGame((s) => s.snapshot?.players ?? [])
+  const teamMode = useGame((s) => s.snapshot?.teamMode ?? 'solo')
   const myPlayer = players.find((p) => p.id === playerId)
   const myTeamId = myPlayer?.teamId ?? null
 
   return (
-    <group ref={groupRef}>
+    <>
       {players.map((p) => {
         if (p.id === playerId) return null
         if (!p.alive && !p.isGhost) return null
         const isTeammate = myTeamId !== null && p.teamId === myTeamId
         const isGhost = p.isGhost
         const color = isGhost ? '#9ca3af' : getNameTagColor(isTeammate, teamMode)
+        // Distance check — hide if > 80 units from self
+        const selfX = myPlayer?.x ?? 0
+        const selfY = myPlayer?.y ?? 0
+        const selfZ = myPlayer?.z ?? 0
+        const dist = Math.hypot(p.x - selfX, p.y - selfY, p.z - selfZ)
+        if (dist > 80) return null
         return (
           <Html
             key={p.id}
@@ -364,6 +366,6 @@ export function WorldPlayers() {
           </Html>
         )
       })}
-    </group>
+    </>
   )
 }

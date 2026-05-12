@@ -3,7 +3,7 @@ import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import { TerrainIsland } from './TerrainIsland'
 import { InstancedTrees, InstancedRocks, Ruins } from './InstancedNature'
 import { ThirdPersonCamera } from './ThirdPersonCamera'
-import { WorldPlayers } from './WorldPlayers'
+import { WorldPlayers, PlayerNameTags } from './WorldPlayers'
 import { ZoneRing } from './ZoneRing'
 import { StormWall } from './StormWall'
 import { PickupMeshes } from './PickupMeshes'
@@ -38,6 +38,7 @@ export function GameScene() {
       <VehicleMeshes />
       <SmokeMeshes />
       <WorldPlayers />
+      <PlayerNameTags />
       <Tracers />
       <DamageNumbers />
       <ThirdPersonCamera />
